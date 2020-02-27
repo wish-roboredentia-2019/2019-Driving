@@ -1,13 +1,3 @@
-/*
-* @file QuadMotorDriverShield.ino
-* @brief QuadMotorDriverShield.ino  Motor control program
-*
-* Every 2 seconds to control motor positive inversion
-*
-* @author linfeng(490289303@qq.com)
-* @version  V1.0
-* @date  2016-4-5
-*/
 const int E1 = 3; ///<Motor1 Speed
 const int E2 = 11;///<Motor2 Speed
 const int E3 = 5; ///<Motor3 Speed
@@ -18,6 +8,43 @@ const int M2 = 12;///<Motor2 Direction
 const int M3 = 8; ///<Motor3 Direction
 const int M4 = 7; ///<Motor4 Direction
 
+// set solenoid pin
+int solenoidPin = 10;
+// for shooting farther away for the smaller cup
+bool tallCup = true;
+int shootCounter = 0;
+
+const int buttonPin = 9;    // the number of the pushbutton pin
+int isObstaclePin = 13;
+int isObstacle = HIGH; // HIGH means no obstacle
+
+// Variables will change:
+int ledState = HIGH;         // the current state of the output pin
+int buttonState;             // the current reading from the input pin
+int lastButtonState = LOW;   // the previous reading from the input pin
+
+// the following variables are unsigned longs because the time, measured in
+// milliseconds, will quickly become a bigger number than can be stored in an int.
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(buttonPin, INPUT);
+  pinMode(isObstaclePin, INPUT);
+  pinMode(solenoidPin, OUTPUT); 
+
+  pinMode(M1, OUTPUT);
+  pinMode(M2, OUTPUT);
+  pinMode(M3, OUTPUT);
+  pinMode(M4, OUTPUT);
+  pinMode(A3, INPUT_PULLUP);
+  pinMode(A4, INPUT_PULLUP);
+  pinMode(A0, INPUT_PULLUP);
+  pinMode(A2, INPUT_PULLUP);
+  pinMode(A1, INPUT_PULLUP);
+}
 
 void M1_advance(char Speed) ///<Motor1 Advance
 {
@@ -61,25 +88,11 @@ void M4_back(char Speed) ///<Motor4 Back off
  analogWrite(E4,Speed);
 }
 
-
-
-void setup() {
-  Serial.begin(9600);
-  pinMode(M1, OUTPUT);
-  pinMode(M2, OUTPUT);
-  pinMode(M3, OUTPUT);
-  pinMode(M4, OUTPUT);
-  pinMode(A3, INPUT_PULLUP);
-  pinMode(A4, INPUT_PULLUP);
-  pinMode(A0, INPUT_PULLUP);
-  pinMode(A1, INPUT_PULLUP);
-
-/**
-  for(int i=3;i<9;i++)
-    pinMode(i,OUTPUT);
-  for(int i=11;i<13;i++)
-    pinMode(i,OUTPUT);
-    **/
+void backward(){
+   M1_back(40);
+   M2_back(40);
+   M3_back(40);
+   M4_back(40); 
 }
 
 void forward(){
@@ -99,60 +112,255 @@ void right(){
   M1_advance(50);
   M2_advance(25);
   M3_advance(50);
-  M4_advance(50); 
+  M4_advance(25); 
 }
 
-void turn90(){
+void stopDriving(){
+    M1_advance(0);
+    M2_advance(0);
+    M3_advance(0);
+    M4_advance(0);
+}
+
+void turnLeft90(){
   unsigned long starttime = millis();
   unsigned long endtime = starttime;
-  while ((endtime - starttime) <= 1100) // do this loop for up to 1000mS
+  while ((endtime - starttime) <= 1530) // do this loop for up to 1000mS
   {
-    Serial.println("Inside turn90");
+    Serial.println("Inside right turn90");
     // code here
     M1_back(100);
     M2_advance(100);
     M3_back(100);
-    M4_advance (100);
+    M4_advance(100);
     endtime = millis();
   }
 
   for (int i = 0; i < 50; i++) {
-    Serial.println("Moving forward in turn90");
-    forward();
+    Serial.println("Moving forward in right turn90");
+    normalDriving();
   }
+}
+
+void turnRight90(){
+  unsigned long starttime = millis();
+  unsigned long endtime = starttime;
+  while ((endtime - starttime) <= 1510) // do this loop for up to 1000mS
+  {
+    Serial.println("Inside right turn90");
+    // code here
+    M1_advance(100);
+    M2_back(100);
+    M3_advance(100);
+    M4_back(100);
+    endtime = millis();
+  }
+
+  for (int i = 0; i < 50; i++) {
+    Serial.println("Moving forward in right turn90");
+    normalDriving();
+  }
+}
+
+void normalDriving() {
+    Serial.println("in Normal driving");
+    double a3read = analogRead(A3)/204.6;
+    double a4read = analogRead(A4)/204.6;
+
+    if(a3read > 4.0 && a4read > 4.0)
+    {
+       forward();
+    }
+    else if(a3read < 4.0)
+    {
+       left();
+    }
+    else if (a4read < 4.0)
+    {
+       right();
+    } 
+  
+}
+
+void driving() {
+    Serial.println("in driving");
+    double a3read = analogRead(A3)/204.6;
+    double a4read = analogRead(A4)/204.6;
+    double a1read = analogRead(A1)/204.6;
+
+    double a0read = analogRead(A0)/204.6;
+    double a2read = analogRead(A2)/204.6;
+    
+    Serial.print("a3: ");
+    Serial.print(a3read);
+    Serial.print(", a4: ");
+    Serial.println(a4read);
+    //Serial.println("a1:" + a1read);
+    
+    if (a1read > 4.0)
+    {
+      turnRight90();
+    }
+    else if(a3read > 4.0 && a4read > 4.0)
+    {
+       forward();
+    }
+    else if(a3read < 4.0)
+    {
+       left();
+    }
+    else if (a4read < 4.0)
+    {
+       right();
+    } 
+  
+}
+
+void shoot() {
+  Serial.println("ACTUALLY SHOOTING!!");
+  Serial.print(tallCup);
+  shootCounter = shootCounter + 1;
+  digitalWrite(solenoidPin, HIGH);      //Switch Solenoid ON
+  delay(500);                          //Wait
+  digitalWrite(solenoidPin, LOW);       //Switch Solenoid OFF
+  delay(1000);                          //Wait
 }
 
 void loop() {
+    /*isObstacle = digitalRead(isObstaclePin);
+    double a1read = analogRead(A1)/204.6;
 
-  /*delay(2000); ///<Delay 2S
-  M1_back(100);
-  M2_back(100);
-  M3_back(100);
-  M4_back(100);
-  delay(2000); ///<Delay 2S */
-  double a3read = analogRead(A3)/204.6;
-  double a4read = analogRead(A4)/204.6;
-  double a0read = analogRead(A0)/204.6;
-  double a1read = analogRead(A1)/204.6;
-  Serial.println(a1read);
-  if (a1read > 4.0)
-  {
-    turn90();
+    Serial.print("Shoot counter: ");
+    Serial.println(shootCounter);
+    
+    if ((isObstacle == LOW) && (shootCounter < 5))
+    {
+      Serial.println("OBSTACLE!!!");
+      unsigned long starttime = millis();
+      unsigned long endtime = starttime;
+      int timer;
+      if (tallCup == true)
+      {
+        timer = 500;
+        tallCup = false;
+      }
+      else
+      {
+        timer = 30;
+        tallCup = true;
+      }
+      while ((endtime - starttime) <= timer) {
+        Serial.println("moving forward after obstacle detection");
+        normalDriving();
+        endtime = millis();
+      }
+      Serial.println("delaying for shooting");
+      stopDriving();
+      delay(1000);
+      Serial.println("SHOOT!!!");
+      //shoot!! 
+      shoot();
+      shoot();
+      while (a1read < 4) {
+        backward();
+        a1read = analogRead(A1)/204.6;
+      }
+      turnLeft90();
+    }
+    else if ((isObstacle == HIGH) && (shootCounter < 5)) {
+       Serial.println("No Obstacle - Driving");
+       driving();
+    }
+    else if (shootCounter >= 5)
+    {
+      Serial.println("Stop Driving - Shoot Counter reached");
+      stopDriving();
+    }*/
+    //delay(200);
+
+  // button code
+  // read the state of the switch into a local variable:
+  int reading = digitalRead(buttonPin);
+  //Serial.println(reading);
+  // check to see if you just pressed the button
+  // (i.e. the input went from LOW to HIGH), and you've waited long enough
+  // since the last press to ignore any noise:
+  // If the switch changed, due to noise or pressing:
+  if (reading != lastButtonState) {
+    // reset the debouncing timer
+    lastDebounceTime = millis();
   }
-  else if(a3read > 4.0 && a4read > 4.0)
-  {
-     forward();
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // whatever the reading is at, it's been there for longer than the debounce
+    // delay, so take it as the actual current state:
+    // if the button state has changed:
+    if (reading != buttonState) {
+      buttonState = reading;
+      // only toggle the LED if the new button state is HIGH
+      if (buttonState == HIGH) {
+        ledState = !ledState;
+      }
+    }
   }
-  else if(a3read < 4.0)
+  // set the LED:
+  if (ledState == LOW)
   {
-     left();
+    Serial.println("program running");
+        isObstacle = digitalRead(isObstaclePin);
+    double a1read = analogRead(A1)/204.6;
+
+    Serial.print("Shoot counter: ");
+    Serial.println(shootCounter);
+    Serial.println(isObstacle);
+    if ((isObstacle == LOW) && (shootCounter < 15))
+    {
+      Serial.println("OBSTACLE!!!");
+      unsigned long starttime = millis();
+      unsigned long endtime = starttime;
+      int timer;
+      if (tallCup == true)
+      {
+        timer = 450;
+        tallCup = false;
+      }
+      else
+      {
+        timer = 10;
+        tallCup = true;
+      }
+      while ((endtime - starttime) <= timer) {
+        Serial.println("moving forward after obstacle detection");
+        normalDriving();
+        endtime = millis();
+      }
+      Serial.println("delaying for shooting");
+      stopDriving();
+      delay(1000);
+      Serial.println("SHOOT!!!");
+      //shoot!! 
+      shoot();
+      shoot();
+      shoot();
+      while (a1read < 4) {
+        backward();
+        a1read = analogRead(A1)/204.6;
+      }
+      turnLeft90();
+    }
+    else if ((isObstacle == HIGH) && (shootCounter < 15)) {
+       Serial.println("No Obstacle - Driving");
+       driving();
+    }
+    else if (shootCounter >= 15)
+    {
+      Serial.println("Stop Driving - Shoot Counter reached");
+      stopDriving();
+    }
   }
-  else
-  {
-    right();
+  else {
+    Serial.println("program stopped");
+    stopDriving();
   }
-   
+  // save the reading. Next time through the loop, it'll be the lastButtonState:
+  lastButtonState = reading;
 }
-
-
-
